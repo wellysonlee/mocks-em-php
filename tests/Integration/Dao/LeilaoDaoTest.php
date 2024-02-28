@@ -2,48 +2,95 @@
 
 namespace Alura\Leilao\Tests\Integration\Dao;
 
-use Alura\Leilao\Dao\Leilao as DaoLeilao;
+use Alura\Leilao\Dao\Leilao as LeilaoDao;
 use Alura\Leilao\Infra\ConnectionCreator;
 use Alura\Leilao\Model\Leilao;
 use PHPUnit\Framework\TestCase;
 
-class LeilaoDao extends TestCase
+class LeilaoDaoTest extends TestCase
 {
-    
-    private static \PDO $pdo;
+    /** @var \PDO */
+    private static $pdo;
 
     public static function setUpBeforeClass(): void
     {
         self::$pdo = new \PDO('sqlite::memory:');
-        self::$pdo->exec('create table leiloes(
+        self::$pdo->exec('create table leiloes (
             id INTEGER primary key,
             descricao TEXT,
-            finalizado BOOL, 
-            dataInicio TEXT);'); 
+            finalizado BOOL,
+            dataInicio TEXT
+        );');
     }
-    protected function setUp():void
+
+    protected function setUp(): void
     {
         self::$pdo->beginTransaction();
     }
-    public function testInsercaoEBuscaDevemFuncionar () 
-    {
-        //arraneg
-        $leilao = new Leilao('Variante 0Km');
-        $leilaoDao = new DaoLeilao (self::$pdo);
-        $leilaoDao->salva($leilao);
 
-        //act
+    /**
+     * @dataProvider leiloes
+     */
+    public function testBuscaLeiloesNaoFinalizados(array $leiloes)
+    {
+        // arrange
+        $leilaoDao = new LeilaoDao(self::$pdo);
+        foreach ($leiloes as $leilao) {
+            $leilaoDao->salva($leilao);
+        }
+
+        // act
         $leiloes = $leilaoDao->recuperarNaoFinalizados();
 
-        //assert
-        self::assertCount(1,$leiloes);
+        // assert
+        self::assertCount(1, $leiloes);
         self::assertContainsOnlyInstancesOf(Leilao::class, $leiloes);
-        self::assertSame('Variante 0Km',$leiloes[0]->recuperarDescricao());
+        self::assertSame(
+            'Variante 0Km',
+            $leiloes[0]->recuperarDescricao()
+        );
+        self::assertFalse($leiloes[0]->estaFinalizado());
+    }
+
+    /**
+     * @dataProvider leiloes
+     */
+    public function testBuscaLeiloesFinalizados(array $leiloes)
+    {
+        // arrange
+        $leilaoDao = new LeilaoDao(self::$pdo);
+        foreach ($leiloes as $leilao) {
+            $leilaoDao->salva($leilao);
+        }
+
+        // act
+        $leiloes = $leilaoDao->recuperarFinalizados();
+
+        // assert
+        self::assertCount(1, $leiloes);
+        self::assertContainsOnlyInstancesOf(Leilao::class, $leiloes);
+        self::assertSame(
+            'Fiat 147 0Km',
+            $leiloes[0]->recuperarDescricao()
+        );
+        self::assertTrue($leiloes[0]->estaFinalizado());
     }
 
     protected function tearDown(): void
     {
         self::$pdo->rollBack();
+    }
 
+    public function leiloes()
+    {
+        $naoFinalizado = new Leilao('Variante 0Km');
+        $finalizado = new Leilao('Fiat 147 0Km');
+        $finalizado->finaliza();
+
+        return [
+            [
+                [$naoFinalizado, $finalizado]
+            ]
+        ];
     }
 }
